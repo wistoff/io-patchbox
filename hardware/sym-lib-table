@@ -1,0 +1,4 @@
+(sym_lib_table
+	(version 7)
+	(lib (name "PJ-320A_Library") (type "KiCad") (uri "/Users/kjellxvx/Library/CloudStorage/ProtonDrive-kjell@wistoff.de-folder/projects/manou/code/esp32s3-mini/hardware/libs/PJ-320A") (options "") (descr ""))
+)
