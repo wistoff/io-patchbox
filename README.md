@@ -112,4 +112,8 @@ pio device monitor
 
 Single-sided carrier PCB designed in KiCad 10 for home etching (toner transfer). All copper on F.Cu, SMD TRRS jacks, THT passives soldered from the top side.
 
+<p align="center">
+  <img src="i-o-patchbox-pcb.png" alt="Etched PCB" width="400">
+</p>
+
 Key components: 3x PJ-320D TRRS jacks (sensor), 3x PJ-320D (actor), 3x 2N2222 NPN transistors, 3x 330R base resistors, 3x 1N4007 flyback diodes.
