@@ -1,67 +1,66 @@
 #include <Arduino.h>
 
-// --- PINOUT (ESP32-S3 Mini) ---
-// Channel 0: TRIG=GP1 (Touch1),  ECHO=GP7,  LED=GP10
-// Channel 1: TRIG=GP2 (Touch2),  ECHO=GP8,  LED=GP11
-// Channel 2: TRIG=GP3 (Touch3),  ECHO=GP9,  LED=GP12
-// Switch:    GP13
-//
+// Pinout (ESP32-S3 Mini)
 // Sensor jack (TRRS): Tip=+5V, Ring1=TRIG, Ring2=ECHO, Sleeve=GND
-// Touch wire connects to Ring2 (ECHO pin) via croco cable
+// Actor jack (TRRS):  Tip=+5V, Sleeve=OUT-, Ring1/Ring2=unused
+// Touch connects to ECHO pin (Ring2) via crocodile cable
 
 const int SWITCH_PIN = 13;
-const int NUM_CHANNELS = 3;
+const int NUM_CH = 3;
+const int TRIG[] = {1, 2, 3};
+const int ECHO[] = {7, 8, 9};
+const int ACT[]  = {10, 11, 12};
 
-const int TRIG_PINS[NUM_CHANNELS] = {1, 2, 3};
-const int ECHO_PINS[NUM_CHANNELS] = {7, 8, 9};
-const int LED_PINS[NUM_CHANNELS]  = {10, 11, 12};
+const float MAX_DIST = 60.0;
+const int CALIB_SKIP = 10;
+const int CALIB_SAMPLES = 40;
 
-const int PWM_FREQ = 25000;
-const int PWM_RES = 8;
-
-const float MAX_DIST_CM = 60.0;
-const int MIN_OUTPUT = 20;
-const float SMOOTH = 0.3;
-
-bool useTouch[NUM_CHANNELS] = {false, false, false};
-int touchBaseline[NUM_CHANNELS] = {0, 0, 0};
-bool touchCalibrated[NUM_CHANNELS] = {false, false, false};
-int calibCount[NUM_CHANNELS] = {0, 0, 0};
-float smoothed[NUM_CHANNELS] = {0, 0, 0};
+bool isTouch[NUM_CH];
+int baseline[NUM_CH];
+int calibCount[NUM_CH];
+float smoothed[NUM_CH];
 bool active = false;
-int loopCount = 0;
 
-// Touch pin = ECHO pin (Ring2 on TRRS jack, where croco cable connects)
-int touchPin[NUM_CHANNELS] = {7, 8, 9};
-
-float readDistanceCm(int ch) {
-  digitalWrite(TRIG_PINS[ch], LOW);
+float readDist(int ch) {
+  digitalWrite(TRIG[ch], LOW);
   delayMicroseconds(2);
-  digitalWrite(TRIG_PINS[ch], HIGH);
+  digitalWrite(TRIG[ch], HIGH);
   delayMicroseconds(10);
-  digitalWrite(TRIG_PINS[ch], LOW);
-  long duration = pulseIn(ECHO_PINS[ch], HIGH, 30000);
-  return duration * 0.0343 / 2.0;
+  digitalWrite(TRIG[ch], LOW);
+  return pulseIn(ECHO[ch], HIGH, 30000) * 0.0343 / 2.0;
 }
 
 bool detectUltrasonic(int ch) {
-  pinMode(TRIG_PINS[ch], OUTPUT);
-  pinMode(ECHO_PINS[ch], INPUT);
+  pinMode(TRIG[ch], OUTPUT);
+  pinMode(ECHO[ch], INPUT);
+  delay(100);
   int hits = 0;
   for (int i = 0; i < 5; i++) {
-    float d = readDistanceCm(ch);
-    if (d >= 2.0 && d <= 400.0) hits++;  // valid HC-SR04 range only
+    float d = readDist(ch);
+    Serial.printf("CH%d probe %d: %.1f cm\n", ch, i, d);
+    if (d >= 2.0 && d <= 400.0) hits++;
     delay(50);
   }
-  return hits >= 4;  // need 4/5 valid readings
+  return hits >= 3;
 }
 
 void blinkAll(int times) {
   for (int i = 0; i < times; i++) {
-    for (int ch = 0; ch < NUM_CHANNELS; ch++) ledcWrite(LED_PINS[ch], 255);
+    for (int ch = 0; ch < NUM_CH; ch++) ledcWrite(ACT[ch], 255);
     delay(150);
-    for (int ch = 0; ch < NUM_CHANNELS; ch++) ledcWrite(LED_PINS[ch], 0);
+    for (int ch = 0; ch < NUM_CH; ch++) ledcWrite(ACT[ch], 0);
     delay(150);
+  }
+}
+
+void detectAndCalibrate() {
+  for (int ch = 0; ch < NUM_CH; ch++) {
+    isTouch[ch] = !detectUltrasonic(ch);
+    if (isTouch[ch]) pinMode(ECHO[ch], INPUT);
+    baseline[ch] = 0;
+    calibCount[ch] = 0;
+    smoothed[ch] = 0;
+    Serial.printf("CH%d: %s\n", ch, isTouch[ch] ? "Touch" : "Ultrasonic");
   }
 }
 
@@ -69,14 +68,9 @@ void setup() {
   Serial.begin(115200);
   delay(2000);
   pinMode(SWITCH_PIN, INPUT_PULLUP);
-
-  Serial.println("=== MANOU startup ===");
-
-  for (int ch = 0; ch < NUM_CHANNELS; ch++) {
-    ledcAttach(LED_PINS[ch], PWM_FREQ, PWM_RES);
-  }
-
-  Serial.println("Ready.");
+  for (int ch = 0; ch < NUM_CH; ch++)
+    ledcAttach(ACT[ch], 25000, 8);
+  Serial.println("MANOU ready");
 }
 
 void loop() {
@@ -85,93 +79,59 @@ void loop() {
   if (switchOn && !active) {
     active = true;
     Serial.println("Switch: ON");
-    // Re-detect sensor type and reset calibration (same as boot)
-    for (int ch = 0; ch < NUM_CHANNELS; ch++) {
-      if (detectUltrasonic(ch)) {
-        useTouch[ch] = false;
-        Serial.printf("CH%d: Ultrasonic (TRIG=%d, ECHO=%d, LED=%d)\n",
-                       ch, TRIG_PINS[ch], ECHO_PINS[ch], LED_PINS[ch]);
-      } else {
-        useTouch[ch] = true;
-        pinMode(touchPin[ch], INPUT);
-        Serial.printf("CH%d: Touch (GPIO %d, LED=%d) — calibrates at runtime\n",
-                       ch, touchPin[ch], LED_PINS[ch]);
-      }
-      touchCalibrated[ch] = false;
-      calibCount[ch] = 0;
-      touchBaseline[ch] = 0;
-      smoothed[ch] = 0;
-    }
+    detectAndCalibrate();
     blinkAll(5);
   } else if (!switchOn && active) {
     active = false;
     Serial.println("Switch: OFF");
-    for (int ch = 0; ch < NUM_CHANNELS; ch++) ledcWrite(LED_PINS[ch], 0);
+    for (int ch = 0; ch < NUM_CH; ch++) ledcWrite(ACT[ch], 0);
   }
 
-  if (!active) {
-    delay(50);
-    return;
-  }
+  if (!active) { delay(50); return; }
 
-  for (int ch = 0; ch < NUM_CHANNELS; ch++) {
-    int brightness = 0;
+  for (int ch = 0; ch < NUM_CH; ch++) {
+    int bright = 0;
 
-    if (useTouch[ch]) {
-      int val = touchRead(touchPin[ch]);
+    if (isTouch[ch]) {
+      int val = touchRead(ECHO[ch]);
 
-      // Runtime calibration: use minimum of first 50 reads as baseline
-      if (!touchCalibrated[ch]) {
+      // Calibration: skip warmup, then take min of samples
+      if (calibCount[ch] < CALIB_SKIP + CALIB_SAMPLES) {
         calibCount[ch]++;
-        if (calibCount[ch] <= 10) {
-          // skip first 10 reads (warmup)
-        } else if (calibCount[ch] <= 50) {
-          if (touchBaseline[ch] == 0 || val < touchBaseline[ch])
-            touchBaseline[ch] = val;
-        } else {
-          touchCalibrated[ch] = true;
-          Serial.printf("CH%d: Calibrated baseline=%d (min of 40 reads)\n", ch, touchBaseline[ch]);
-        }
-        ledcWrite(LED_PINS[ch], 0);
+        if (calibCount[ch] > CALIB_SKIP && (baseline[ch] == 0 || val < baseline[ch]))
+          baseline[ch] = val;
+        if (calibCount[ch] == CALIB_SKIP + CALIB_SAMPLES)
+          Serial.printf("CH%d: baseline=%d\n", ch, baseline[ch]);
+        ledcWrite(ACT[ch], 0);
         continue;
       }
 
-      // ESP32-S3: touch values INCREASE when touched
-      int rise = val - touchBaseline[ch];
-      int deadzone = touchBaseline[ch] / 5;
-      // Adaptive baseline: drift toward val when idle (below deadzone)
-      if (rise < deadzone) {
-        touchBaseline[ch] += (val - touchBaseline[ch]) / 10;
-      }
-      if (rise > deadzone) {
-        brightness = map(rise, deadzone, touchBaseline[ch], 0, 255);
-        brightness = constrain(brightness, 0, 255);
-      }
-      // Asymmetric smoothing: ramp up slowly, ramp down faster
-      // Slow rise absorbs motor-stop noise; fast fall feels responsive on release
-      float alpha = (brightness > smoothed[ch]) ? 0.15 : 0.4;
-      smoothed[ch] += alpha * (brightness - smoothed[ch]);
-      brightness = (int)(smoothed[ch] + 0.5);
-      if (loopCount % 10 == 0)
-        Serial.printf("CH%d TOUCH: val=%d base=%d rise=%d dz=%d bright=%d\n",
-                       ch, val, touchBaseline[ch], rise, deadzone, brightness);
-    } else {
-      float dist = readDistanceCm(ch);
-      if (dist > 0 && dist <= MAX_DIST_CM) {
-        brightness = 255 - (int)(dist / MAX_DIST_CM * 255);
-      }
-      // smooth ultrasonic
-      smoothed[ch] += SMOOTH * (brightness - smoothed[ch]);
-      brightness = (int)(smoothed[ch] + 0.5);
-      if (brightness < MIN_OUTPUT) brightness = 0;
+      int rise = val - baseline[ch];
+      int deadzone = baseline[ch] / 5;
 
-      if (loopCount % 10 == 0)
-        Serial.printf("CH%d ULTRA: dist=%.1f bright=%d\n", ch, dist, brightness);
+      // Drift baseline when idle
+      if (rise < deadzone)
+        baseline[ch] += (val - baseline[ch]) / 10;
+
+      if (rise > deadzone)
+        bright = constrain(map(rise, deadzone, baseline[ch], 0, 255), 0, 255);
+
+      // Asymmetric smoothing: fast rise, faster fall
+      float alpha = (bright > smoothed[ch]) ? 0.5 : 0.7;
+      smoothed[ch] += alpha * (bright - smoothed[ch]);
+      bright = (int)(smoothed[ch] + 0.5);
+    } else {
+      float dist = readDist(ch);
+      if (dist > 0 && dist <= MAX_DIST)
+        bright = 255 - (int)(dist / MAX_DIST * 255);
+
+      smoothed[ch] += 0.6 * (bright - smoothed[ch]);
+      bright = (int)(smoothed[ch] + 0.5);
+      if (bright < 20) bright = 0;
     }
 
-    ledcWrite(LED_PINS[ch], brightness);
+    ledcWrite(ACT[ch], bright);
   }
 
-  loopCount++;
-  delay(50);
+  delay(20);
 }
