@@ -37,15 +37,30 @@ i-o-patchbox/
 │       ├── src/main.cpp
 │       ├── platformio.ini
 │       └── PINOUT.md
-└── hardware/                    # KiCad 10 PCB project
-    ├── pcb.kicad_sch             # schematic
-    ├── pcb.kicad_pcb             # board layout (single-sided, home-etched)
-    ├── pcb.kicad_pro             # project file
-    ├── libs/PJ-320A/             # TRRS jack symbol + footprint library
-    ├── gerber/                   # fabrication outputs
-    ├── exports/                  # SVG renders, drill maps
-    ├── backups/                  # KiCad auto-backups
-    └── schaltplan.pdf            # schematic export
+├── hardware/                    # KiCad 10 PCB project
+│   ├── pcb.kicad_sch             # schematic
+│   ├── pcb.kicad_pcb             # board layout (single-sided, home-etched)
+│   ├── pcb.kicad_pro             # project file
+│   ├── libs/PJ-320A/             # TRRS jack symbol + footprint library
+│   ├── gerber/                   # fabrication outputs
+│   ├── exports/                  # SVG renders, drill maps
+│   ├── backups/                  # KiCad auto-backups
+│   └── schaltplan.pdf            # schematic export
+└── enclosure/                   # 3D-printable cases (OBJ)
+    ├── cable-plug.obj            # cable strain relief (used by all sensors and actors)
+    ├── patchbox/                 # main device enclosure
+    │   ├── top.obj
+    │   ├── bottom.obj
+    │   └── indicator.obj
+    ├── sensors/                  # sensor housings
+    │   ├── ultrasonic-top.obj
+    │   └── ultrasonic-bottom.obj
+    └── actors/                   # actor housings
+        ├── dc-motor-top.obj
+        ├── dc-motor-bottom.obj
+        ├── vibration-motor-top.obj
+        ├── vibration-motor-bottom.obj
+        └── led.obj
 ```
 
 ## Pin assignment (ESP32-S3 Mini)
