@@ -1,8 +1,8 @@
 # I/O Patchbox
 
-A 3-channel sensor-to-actor controller for **Technomateriale Kunsttherapie**, a new form of art therapy developed by **Manou Wistoff** in her master thesis at [Alanus Kunsthochschule](https://www.alanus.edu) in the field of Kunsttherapie.
+A 3-channel sensor-to-actor controller designed for **Manou Wistoff**'s approach to **phygitale Kunsttherapie**, part of her master thesis at [Alanus Kunsthochschule](https://www.alanus.edu).
 
-The concept of Technomateriale Kunsttherapie is to understand interactive electronic components as *material* in the art therapy process, just like clay, paint, or fabric. In the therapy workshop, clients create interactive "Wesen" (creatures) by combining classical crafting materials with sensors and actors connected through the I/O Patchbox.
+Building on the concept of phygitale Kunsttherapie, the I/O Patchbox makes the digital tangible by bringing interactive electronics into the physical space. Interactive electronic components become *material* in the art therapy process, just like clay, paint, or fabric. Through process-oriented creating (Tinkering), clients combine classical crafting materials with sensors and actors connected through the I/O Patchbox, resulting in interactive artworks.
 
 The I/O Patchbox is built on an ESP32-S3 Mini with a custom carrier PCB. Each channel auto-detects its sensor type at boot (ultrasonic HC-SR04 or capacitive touch) and drives an output (LED, motor) proportionally via PWM through a low-side NPN transistor stage.
 
